@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main
+      - '**'      # every branch, so the guard also checks anything pushed to a side branch before it is merged
 
 permissions:
-  contents: read
+  contents: write   # only so the guard can save its file lock (tools/files.lock)
 
 jobs:
   build-debug-apk:
@@ -28,8 +28,13 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: File guard (blocks the build if any file is missing or changed)
-        run: node tools/guard.mjs
+      - name: File guard (stops the build if any locked file is missing or a dictionary file changed)
+        run: |
+          if [ ! -f tools/guard.mjs ]; then
+            echo "::error::tools/guard.mjs is missing. Unpack axon-guard-v2_1.zip first (Actions, Unpack a zip into the repository), then run this build again."
+            exit 1
+          fi
+          node tools/guard.mjs
 
       - name: Install JavaScript dependencies
         run: npm install --no-audit --no-fund
@@ -40,22 +45,22 @@ jobs:
 
       - name: Type check
         id: typecheck
-        continue-on-error: true
+        continue-on-error: ${{ vars.AXON_GATE != 'on' }}
         run: npm run lint
 
       - name: Background tests
         id: tests
-        continue-on-error: true
+        continue-on-error: ${{ vars.AXON_GATE != 'on' }}
         run: npm run test:bg
 
       - name: Kernel tests
         id: kerneltests
-        continue-on-error: true
+        continue-on-error: ${{ vars.AXON_GATE != 'on' }}
         run: npm run test:kernel
 
       - name: Chat session tests
         id: chattests
-        continue-on-error: true
+        continue-on-error: ${{ vars.AXON_GATE != 'on' }}
         run: npm run test:chat
 
       - name: Add Android platform
@@ -83,6 +88,18 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
+      - name: Lock newly added files (the lock only grows; refuses if anything is damaged)
+        if: success()
+        run: |
+          node tools/guard.mjs --ratchet
+          if [ -n "$(git status --porcelain tools/files.lock)" ]; then
+            git config user.name "axon-guard"
+            git config user.email "axon-guard@users.noreply.github.com"
+            git add tools/files.lock
+            git commit -m "Guard: lock newly added files"
+            git push || echo "Could not save the lock this time (not fatal)."
+          fi
+
       - name: Upload generated lockfile
         if: always()
         uses: actions/upload-artifact@v6
@@ -102,4 +119,5 @@ jobs:
             echo "- Kernel tests: ${{ steps.kerneltests.outcome }}"
             echo "- Chat session tests: ${{ steps.chattests.outcome }}"
             echo "- Debug APK: ${{ steps.apk.outcome }}"
+            echo "- Test gate (AXON_GATE): ${{ vars.AXON_GATE || 'off' }}"
           } >> "$GITHUB_STEP_SUMMARY"
