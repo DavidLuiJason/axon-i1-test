@@ -1,6 +1,6 @@
 {
  "version": 2,
- "seal": "87eb03e70cebfcb512c696fc828671a6822cb78d0b2bcfbd3f8d3853c75491c4",
+ "seal": "c8f6a1e1b871a1084c239eb0d5545fb88af9c96bdfd1f9b4c67d6204f316735e",
  "dictionaries": [
   "public/dictionary/en"
  ],
@@ -22,6 +22,9 @@
   },
   "EVIDENCE.md": {
    "bytes": 814
+  },
+  "README.md": {
+   "bytes": 14
   },
   "STAGE6_1_REPORT.md": {
    "bytes": 6948
