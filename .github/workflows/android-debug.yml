@@ -88,6 +88,22 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
+      - name: Publish the APK as a release download (a plain .apk file, no zip, no sign-in needed)
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK="axon-debug-${{ github.run_number }}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$APK"
+          gh release create "apk-${{ github.run_number }}" "$APK" --prerelease --target "$GITHUB_SHA" \
+            --title "AXON debug build ${{ github.run_number }}" \
+            --notes "Debug APK from build ${{ github.run_number }} (commit $GITHUB_SHA). Tap the .apk file to download and install it." \
+            || echo "Could not publish the release this time (not fatal; use the zipped artifact)."
+          # keep only the 5 newest apk-* releases so the repository does not fill up
+          gh release list --limit 100 --json tagName -q '.[].tagName' | grep '^apk-' | tail -n +6 | while read -r t; do
+            gh release delete "$t" --cleanup-tag -y || true
+          done
+
       - name: Lock newly added files (the lock only grows; refuses if anything is damaged)
         if: success()
         run: |
@@ -119,5 +135,6 @@ jobs:
             echo "- Kernel tests: ${{ steps.kerneltests.outcome }}"
             echo "- Chat session tests: ${{ steps.chattests.outcome }}"
             echo "- Debug APK: ${{ steps.apk.outcome }}"
+            echo "- APK download: Releases, apk-${{ github.run_number }} (plain .apk)"
             echo "- Test gate (AXON_GATE): ${{ vars.AXON_GATE || 'off' }}"
           } >> "$GITHUB_STEP_SUMMARY"
